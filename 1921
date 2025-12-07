@@ -1,0 +1,237 @@
+"""
+Model Training Script for Cyberbullying Detection
+Creates and evaluates ML model for demonstration
+"""
+
+import pandas as pd
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+import joblib
+import re
+import nltk
+from nltk.corpus import stopwords
+
+# Download required NLTK data
+nltk.download('stopwords', quiet=True)
+nltk.download('punkt', quiet=True)
+
+class CyberbullyingModelTrainer:
+    """Train and evaluate cyberbullying detection model"""
+    
+    def __init__(self):
+        self.vectorizer = TfidfVectorizer(
+            max_features=3000,
+            stop_words=stopwords.words('english'),
+            ngram_range=(1, 3),
+            min_df=2,
+            max_df=0.8
+        )
+        self.model = RandomForestClassifier(
+            n_estimators=150,
+            max_depth=25,
+            min_samples_split=5,
+            min_samples_leaf=2,
+            class_weight='balanced',
+            random_state=42
+        )
+    
+    def create_training_data(self):
+        """Create comprehensive training dataset"""
+        
+        # Non-bullying examples
+        non_bullying = [
+            "Have a wonderful day!",
+            "Great work on the project",
+            "Thanks for your help with this",
+            "Looking forward to our meeting",
+            "I appreciate your support",
+            "That's an interesting perspective",
+            "Let's collaborate on this",
+            "Congratulations on your achievement",
+            "I enjoyed our conversation",
+            "Keep up the good work",
+            "Can we discuss this further?",
+            "Your input is valuable",
+            "Nice to meet you",
+            "Happy birthday!",
+            "Good luck with your exam"
+        ]
+        
+        # Joke/friendly banter examples
+        jokes = [
+            "Haha you're crazy! Just kidding 😂",
+            "LOL that was hilarious! You're too funny",
+            "You're such a goofball, my friend",
+            "OMG you're killing me with laughter",
+            "That's so dumb in the best way! Hahaha",
+            "You're a mess (in a good way!)",
+            "Stop making me laugh so hard!",
+            "You're ridiculous and I love it",
+            "Hahaha good one! You got me",
+            "You're wild! 😆 Just messing with you"
+        ]
+        
+        # Potentially harmful examples
+        borderline = [
+            "That was really stupid, to be honest",
+            "Why would you do something like that?",
+            "You never seem to get things right",
+            "This is getting frustrating",
+            "Are you serious right now?",
+            "What's wrong with you sometimes?",
+            "I can't believe you did that",
+            "You're making things difficult",
+            "This isn't working out",
+            "You should think before speaking"
+        ]
+        
+        # Clear cyberbullying examples
+        bullying = [
+            "You're worthless and nobody likes you",
+            "Everyone thinks you should just leave",
+            "You're such a failure at everything",
+            "Why do you even bother trying?",
+            "Nobody wants you here, go away",
+            "You're the worst person I know",
+            "You deserve to be alone forever",
+            "You're pathetic and useless",
+            "I hate everything about you",
+            "You should disappear from our lives"
+        ]
+        
+        # Combine all examples
+        texts = non_bullying + jokes + borderline + bullying
+        labels = [0]*len(non_bullying) + [0]*len(jokes) + [1]*len(borderline) + [2]*len(bullying)
+        
+        return pd.DataFrame({'text': texts, 'label': labels})
+    
+    def preprocess_text(self, text):
+        """Preprocess text for training"""
+        text = str(text).lower()
+        text = re.sub(r'[^\w\s]', ' ', text)
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
+    
+    def train(self):
+        """Train the model"""
+        print("Creating training data...")
+        df = self.create_training_data()
+        
+        print(f"Dataset size: {len(df)} samples")
+        print(f"Class distribution:\n{df['label'].value_counts()}")
+        
+        # Preprocess texts
+        df['processed_text'] = df['text'].apply(self.preprocess_text)
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            df['processed_text'],
+            df['label'],
+            test_size=0.2,
+            random_state=42,
+            stratify=df['label']
+        )
+        
+        print(f"\nTraining samples: {len(X_train)}")
+        print(f"Testing samples: {len(X_test)}")
+        
+        # Vectorize texts
+        print("\nVectorizing texts...")
+        X_train_vec = self.vectorizer.fit_transform(X_train)
+        X_test_vec = self.vectorizer.transform(X_test)
+        
+        # Train model
+        print("Training model...")
+        self.model.fit(X_train_vec, y_train)
+        
+        # Evaluate
+        print("\n=== Model Evaluation ===")
+        y_pred = self.model.predict(X_test_vec)
+        
+        print("\nClassification Report:")
+        print(classification_report(y_test, y_pred, 
+                                   target_names=['Non-bullying', 'Borderline', 'Cyberbullying']))
+        
+        accuracy = accuracy_score(y_test, y_pred)
+        print(f"Overall Accuracy: {accuracy:.3f}")
+        
+        # Save model
+        self.save_model()
+        
+        return self
+    
+    def save_model(self):
+        """Save trained model and vectorizer"""
+        model_data = {
+            'vectorizer': self.vectorizer,
+            'model': self.model
+        }
+        joblib.dump(model_data, 'models/cyberbullying_model.pkl')
+        print("\nModel saved to: models/cyberbullying_model.pkl")
+    
+    @staticmethod
+    def load_model(path='models/cyberbullying_model.pkl'):
+        """Load saved model"""
+        model_data = joblib.load(path)
+        
+        trainer = CyberbullyingModelTrainer()
+        trainer.vectorizer = model_data['vectorizer']
+        trainer.model = model_data['model']
+        
+        return trainer
+
+def demo_predictions():
+    """Demonstrate model predictions"""
+    
+    trainer = CyberbullyingModelTrainer.load_model()
+    
+    test_cases = [
+        "You're amazing! Great job today!",
+        "Haha you're such an idiot! Just kidding bro 😂",
+        "That was a really stupid thing to do",
+        "You're worthless and should leave",
+        "Thanks for helping me with this project",
+        "Why are you always making mistakes?",
+        "LOL you're too funny!",
+        "Nobody wants you here, go away"
+    ]
+    
+    print("\n=== Demonstration Predictions ===")
+    print("-" * 50)
+    
+    for text in test_cases:
+        # Preprocess
+        processed = trainer.preprocess_text(text)
+        vectorized = trainer.vectorizer.transform([processed])
+        
+        # Predict
+        prediction = trainer.model.predict(vectorized)[0]
+        probabilities = trainer.model.predict_proba(vectorized)[0]
+        
+        # Map prediction to label
+        labels = ['Non-bullying', 'Borderline', 'Cyberbullying']
+        predicted_label = labels[prediction]
+        
+        print(f"\nText: {text}")
+        print(f"Prediction: {predicted_label}")
+        print(f"Probabilities: Non-bullying={probabilities[0]:.3f}, "
+              f"Borderline={probabilities[1]:.3f}, "
+              f"Cyberbullying={probabilities[2]:.3f}")
+
+if __name__ == "__main__":
+    print("=== Cyberbullying Detection Model Training ===")
+    print("=" * 50)
+    
+    # Train model
+    trainer = CyberbullyingModelTrainer()
+    trainer.train()
+    
+    # Show demo predictions
+    demo_predictions()
+    
+    print("\n" + "=" * 50)
+    print("Training completed successfully!")
+    print("Run 'streamlit run app.py' to start the web application")
